@@ -11,6 +11,14 @@
 			return 0; \
 		break;
 
+#ifdef UNICODE
+#define STRING std::wstring
+#define STRING_VIEW std::wstring_view
+#else
+#define STRING std::string
+#define STRING_VIEW std::string_view
+#endif
+
 namespace voidptr {
 	using window_position_t = std::pair<int, int>;
 	using window_size_t = std::pair<int, int>;
@@ -22,9 +30,9 @@ namespace voidptr {
 
 	class i_easy_window {
 	protected:
-		const std::string name;
+		const STRING name;
 	public:
-		i_easy_window(std::string_view name) : name(name) {}
+		explicit i_easy_window(STRING_VIEW name) : name(name) {}
 		virtual ~i_easy_window() = default;
 		virtual void destroy_window() = 0;
 		virtual void create_window(i_window_create_params*) = 0;
@@ -45,13 +53,12 @@ namespace voidptr {
 	private:
 		static LRESULT WINAPI static_windproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
 			if (msg == WM_NCCREATE) {
-				auto cs = (CREATESTRUCT*)(lparam);
+				const auto cs = reinterpret_cast<CREATESTRUCT*>(lparam);
 				auto _this = cs->lpCreateParams;
-				SetWindowLongPtr(hwnd, 0, (LONG_PTR)_this);
+				SetWindowLongPtr(hwnd, 0, reinterpret_cast<LONG_PTR>(_this));
 			}
 
-			auto* window = (win32_window*)(GetWindowLongPtr(hwnd, 0));
-			if (window) {
+			if (auto* window = reinterpret_cast<win32_window*>((GetWindowLongPtr(hwnd, 0)))) {
 				return window->wndproc(hwnd, msg, wparam, lparam);
 			} else {
 				return ::DefWindowProc(hwnd, msg, wparam, lparam);
@@ -59,15 +66,15 @@ namespace voidptr {
 		}
 
 	protected:
-		const std::string name;
-		const std::string classname;
+		const STRING name;
+		const STRING classname;
 		bool alive;
 		HWND hwnd;
 		WNDCLASSEX wc;
 
 	public:
-		win32_window(std::string_view name) : i_easy_window(name), classname(std::string(name) + "_WINDOWCLASS") {}
-		~win32_window() {
+		explicit win32_window(STRING_VIEW name) : i_easy_window(name), classname(STRING(name) + TEXT("_WINDOWCLASS")) {}
+		~win32_window() override {
 			destroy_window();
 		}
 
@@ -97,11 +104,11 @@ namespace voidptr {
 			}
 		}
 
-		inline void show_window(int nc = SW_SHOWDEFAULT) {
+		inline void show_window(int nc = SW_SHOWDEFAULT) const {
 			ShowWindow(hwnd, nc);
 		}
 
-		inline void update_window() {
+		inline void update_window() const {
 			UpdateWindow(hwnd);
 		}
 
@@ -148,7 +155,7 @@ namespace voidptr {
 			if ((d3d = Direct3DCreate9(D3D_SDK_VERSION)) == NULL) {
 				throw std::runtime_error(std::format("Cannot create d3d"));
 			}
-			
+
 			memset(&present_parameters, 0x0, sizeof(present_parameters));
 			present_parameters.Windowed = TRUE;
 			present_parameters.SwapEffect = D3DSWAPEFFECT_DISCARD;
@@ -184,13 +191,16 @@ namespace voidptr {
 		D3DPRESENT_PARAMETERS present_parameters;
 
 	public:
-		directx9_window(std::string_view name) : win32_window(name) {}
+		directx9_window(STRING_VIEW name) : win32_window(name) {}
 		virtual ~directx9_window() override {
 			cleanup_device();
 		}
 
+		virtual void when_device_created() {}
+
 		virtual void start_window_loop() override {
 			create_device();
+			when_device_created();
 			win32_window::start_window_loop();
 		}
 
@@ -201,8 +211,6 @@ namespace voidptr {
 		}
 
 		virtual void loop_cycle() override {
-			
-
 			device->SetRenderState(D3DRS_ZENABLE, FALSE);
 			device->SetRenderState(D3DRS_ALPHABLENDENABLE, FALSE);
 			device->SetRenderState(D3DRS_SCISSORTESTENABLE, FALSE);
@@ -213,8 +221,8 @@ namespace voidptr {
 				apply_render();
 			}
 
-			auto result = device->Present(0, 0, 0, 0);
-			if (result == D3DERR_DEVICELOST && device->TestCooperativeLevel() == D3DERR_DEVICENOTRESET)
+			if (const auto result = device->Present(0, 0, 0, 0);
+				result == D3DERR_DEVICELOST && device->TestCooperativeLevel() == D3DERR_DEVICENOTRESET)
 				reset_device();
 		}
 	};
