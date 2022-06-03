@@ -155,7 +155,7 @@ namespace voidptr {
 			if ((d3d = Direct3DCreate9(D3D_SDK_VERSION)) == NULL) {
 				throw std::runtime_error(std::format("Cannot create d3d"));
 			}
-			
+
 			memset(&present_parameters, 0x0, sizeof(present_parameters));
 			present_parameters.Windowed = TRUE;
 			present_parameters.SwapEffect = D3DSWAPEFFECT_DISCARD;
@@ -221,7 +221,7 @@ namespace voidptr {
 				apply_render();
 			}
 
-			if (const auto result = device->Present(0, 0, 0, 0); 
+			if (const auto result = device->Present(0, 0, 0, 0);
 				result == D3DERR_DEVICELOST && device->TestCooperativeLevel() == D3DERR_DEVICENOTRESET)
 				reset_device();
 		}
